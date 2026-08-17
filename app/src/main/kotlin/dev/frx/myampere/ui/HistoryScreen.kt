@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.frx.myampere.core.downsampleForDisplay
 import dev.frx.myampere.db.AppDb
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -80,8 +81,32 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.outline,
         )
 
+        val initialSlope: String? = remember(pointsCurrent) {
+            if (pointsCurrent.size >= 2) {
+                val i = pointsCurrent.size - 2
+                val dVal = (pointsCurrent[i + 1].second - pointsCurrent[i].second).toFloat()
+                val dMs  = (pointsCurrent[i + 1].first  - pointsCurrent[i].first).toFloat()
+                val slope = if (dMs > 0f) dVal / dMs * 60_000f else 0f
+                "Pente : ${slope.roundToInt()} mA/min"
+            } else null
+        }
+        var slopeText by remember(pointsCurrent) { mutableStateOf(initialSlope) }
         ChartCard("Courant (mA)", MaterialTheme.colorScheme.primary, lastCurrentMa?.let { "$it mA" }, Modifier.weight(1f)) { color ->
-            LineChart(pointsCurrent, Modifier.fillMaxWidth().weight(1f), color)
+            LineChart(
+                pointsCurrent,
+                Modifier.fillMaxWidth().weight(1f),
+                color,
+                onTapSlope = { slope -> slopeText = "Pente : ${slope.roundToInt()} mA/min" },
+            )
+            slopeText?.let {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    it,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         ChartCard("Niveau (%)", MaterialTheme.colorScheme.secondary, lastLevelPct?.let { "$it %" }, Modifier.weight(1f)) { color ->
             LineChart(pointsLevel, Modifier.fillMaxWidth().weight(1f), color)
