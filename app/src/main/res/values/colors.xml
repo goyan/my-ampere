@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="charge_green">#2E7D32</color>
+    <color name="discharge_red">#C62828</color>
+    <color name="stale_grey">#9E9E9E</color>
+    <color name="widget_bg">#E6202124</color>
+</resources>
