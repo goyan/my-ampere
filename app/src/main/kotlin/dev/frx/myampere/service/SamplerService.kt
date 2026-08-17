@@ -54,9 +54,15 @@ class SamplerService : Service() {
         super.onCreate()
         reader = BatteryReader(this)
         lastMaintenanceMs = System.currentTimeMillis()
-        // Une seule lecture bloquante ici (process fraîchement créé, hors main thread suivant) :
+        // Une seule lecture bloquante ici, et une seule fois par process (resyncedFromDisk) :
         // resynchronise le toggle utilisateur avec sa valeur persistée avant tout démarrage.
-        userEnabled = runBlocking { Prefs.userEnabled(this@SamplerService) }
+        // Sans ce garde-fou, un onCreate ulterieur du meme process (le service peut etre
+        // recree plusieurs fois sans que le process ne meure) ecraserait une valeur memoire
+        // a jour (mise par setUserEnabled) avec une lecture disque potentiellement en retard.
+        if (!resyncedFromDisk) {
+            userEnabled = runBlocking { Prefs.userEnabled(this@SamplerService) }
+            resyncedFromDisk = true
+        }
         registerReceiver(stateReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -170,8 +176,12 @@ class SamplerService : Service() {
         @Volatile var appVisible: Boolean = false
         /** Toggle utilisateur : quand false, onResume/onPause ne relancent PAS le service.
          *  Source de vérité durable : [Prefs.userEnabled] (DataStore) — ce champ n'est qu'un
-         *  cache mémoire, resynchronisé depuis le disque à chaque [onCreate]. */
+         *  cache mémoire, resynchronisé depuis le disque une seule fois par process (voir
+         *  [resyncedFromDisk]) puis considéré à jour ensuite. */
         @Volatile var userEnabled: Boolean = true
+        /** Armé après la première resync disque du process (onCreate) ou par [setUserEnabled] :
+         *  au-delà, la valeur mémoire fait foi, on ne relit plus le disque. */
+        @Volatile private var resyncedFromDisk: Boolean = false
 
         fun start(context: Context) =
             context.startForegroundService(Intent(context, SamplerService::class.java))
@@ -181,6 +191,7 @@ class SamplerService : Service() {
         /** Change le toggle utilisateur : persiste puis démarre/arrête le service en conséquence. */
         fun setUserEnabled(context: Context, enabled: Boolean) {
             userEnabled = enabled
+            resyncedFromDisk = true
             ioScope.launch { Prefs.setUserEnabled(context, enabled) }
             if (enabled) start(context) else stop(context)
         }

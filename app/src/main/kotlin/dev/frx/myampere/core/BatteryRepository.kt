@@ -27,7 +27,12 @@ object BatteryRepository {
 
     @Synchronized
     fun onSample(sample: BatterySample) {
-        consecutiveUnsupported = if (sample.currentMa == 0) consecutiveUnsupported + 1 else 0
+        // 0 mA est legitime batterie pleine (FULL) ou en attente de charge (NOT_CHARGING) :
+        // ne pas les compter comme un signe de mesure non supportee.
+        val legitimateZero = sample.currentMa == 0 &&
+            (sample.status == ChargeStatus.FULL || sample.status == ChargeStatus.NOT_CHARGING)
+        consecutiveUnsupported =
+            if (sample.currentMa == 0 && !legitimateZero) consecutiveUnsupported + 1 else 0
         _unsupported.value = consecutiveUnsupported >= UNSUPPORTED_THRESHOLD
         _latest.value = sample
         _sessionMin.value = minOf(_sessionMin.value ?: sample.currentMa, sample.currentMa)

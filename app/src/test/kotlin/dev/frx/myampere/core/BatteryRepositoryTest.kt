@@ -6,8 +6,8 @@ import org.junit.Before
 import org.junit.Test
 
 class BatteryRepositoryTest {
-    private fun sample(ts: Long, ma: Int) =
-        BatterySample(ts, ma, 80, 4000, 300, ChargeStatus.DISCHARGING, "bonne", "Li-ion")
+    private fun sample(ts: Long, ma: Int, status: ChargeStatus = ChargeStatus.DISCHARGING) =
+        BatterySample(ts, ma, 80, 4000, 300, status, "bonne", "Li-ion")
 
     @Before fun reset() = BatteryRepository.resetForTest()
 
@@ -52,6 +52,16 @@ class BatteryRepositoryTest {
         repeat(29) { BatteryRepository.onSample(sample(it.toLong(), 0)) }
         BatteryRepository.onSample(sample(29L, -50))
         repeat(29) { BatteryRepository.onSample(sample((30 + it).toLong(), 0)) }
+        assertEquals(false, BatteryRepository.unsupported.value)
+    }
+
+    @Test fun `0 mA batterie pleine ne declenche jamais unsupported`() {
+        repeat(60) { BatteryRepository.onSample(sample(it.toLong(), 0, ChargeStatus.FULL)) }
+        assertEquals(false, BatteryRepository.unsupported.value)
+    }
+
+    @Test fun `0 mA en attente de charge ne declenche jamais unsupported`() {
+        repeat(60) { BatteryRepository.onSample(sample(it.toLong(), 0, ChargeStatus.NOT_CHARGING)) }
         assertEquals(false, BatteryRepository.unsupported.value)
     }
 }

@@ -11,9 +11,6 @@ import dev.frx.myampere.core.normalizeCurrentMa
 class BatteryReader(private val context: Context) {
     private val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
 
-    @Volatile private var hasRead = false
-    @Volatile private var lastPlugged = false
-
     fun read(nowMs: Long): BatterySample? {
         val raw = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         val ma = normalizeCurrentMa(raw) ?: return null
@@ -39,18 +36,15 @@ class BatteryReader(private val context: Context) {
         }
         val technology = sticky?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: ""
         val pct = if (level >= 0 && scale > 0) level * 100 / scale else -1
-        lastPlugged = (sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
-        hasRead = true
         return BatterySample(nowMs, ma, pct, voltage, temp, status, health, technology)
     }
 
-    /** Rend l'état "branché" dérivé de la dernière lecture (aucun nouvel appel binder).
-     *  Fallback en lecture directe si aucun [read] n'a encore eu lieu. */
+    /** Lecture directe et à jour du sticky : appelée par la boucle du service AVANT read(),
+     *  un cache basé sur la dernière lecture serait périmé d'un tick (ex. écran off + décharge
+     *  -> sortie de boucle -> au POWER_CONNECTED le cache dirait encore "non branché" et la
+     *  charge nocturne ne serait jamais enregistrée). */
     fun isPlugged(): Boolean {
-        if (!hasRead) {
-            val sticky = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-            return (sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
-        }
-        return lastPlugged
+        val sticky = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        return (sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
     }
 }
