@@ -26,14 +26,14 @@ android {
     sourceSets["test"].kotlin.srcDir("src/test/kotlin")
 }
 
+kotlin { jvmToolchain(17) }
+
 dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.ui)
-    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
-    implementation(libs.lifecycle.process)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
