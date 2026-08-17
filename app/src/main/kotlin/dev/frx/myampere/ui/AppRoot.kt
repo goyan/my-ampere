@@ -15,8 +15,7 @@ import androidx.compose.ui.Modifier
 
 fun downsampleForDisplay(samples: List<Pair<Long, Int>>, maxPoints: Int): List<Pair<Long, Int>> {
     if (samples.size <= maxPoints) return samples
-    val step = samples.size / maxPoints
-    return samples.filterIndexed { i, _ -> i % step == 0 }.take(maxPoints)
+    return List(maxPoints) { i -> samples[i * (samples.size - 1) / (maxPoints - 1)] }
 }
 
 @Composable
