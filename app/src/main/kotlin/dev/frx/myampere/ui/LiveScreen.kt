@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,10 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.frx.myampere.core.BatteryRepository
 import dev.frx.myampere.core.ChargeStatus
@@ -44,41 +48,111 @@ fun LiveScreen(modifier: Modifier = Modifier) {
         running = withContext(Dispatchers.IO) { Prefs.userEnabled(context) }
     }
 
+    val ma = sample?.currentMa
+    val currentColor = when {
+        unsupported -> MaterialTheme.colorScheme.outline
+        (ma ?: 0) > 0 -> MaterialTheme.colorScheme.primary
+        (ma ?: 0) < 0 -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.outline
+    }
+
     Column(
-        modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top,
+        modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Monitoring")
-            Spacer(Modifier.height(0.dp))
-            Switch(checked = running, onCheckedChange = {
-                running = it
-                SamplerService.setUserEnabled(context, it)
-            })
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Monitoring", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.weight(1f))
+                Switch(checked = running, onCheckedChange = {
+                    running = it
+                    SamplerService.setUserEnabled(context, it)
+                })
+            }
         }
-        val ma = sample?.currentMa
-        Text(
-            text = when {
-                unsupported -> "mesure non supportée sur cet appareil"
-                ma != null -> "$ma mA"
-                else -> "—"
-            },
-            fontSize = if (unsupported) 20.sp else 56.sp,
-            color = when {
-                unsupported -> Color.Gray
-                (ma ?: 0) >= 0 -> Palette.chargeGreen
-                else -> Palette.dischargeRed
-            },
-        )
-        Text(statusLabel(sample?.status ?: ChargeStatus.UNKNOWN))
-        Text("min ${min ?: "—"} mA   max ${max ?: "—"} mA")
-        Spacer(Modifier.height(16.dp))
-        LiveGraph(Modifier.fillMaxWidth().height(160.dp))
-        Spacer(Modifier.height(16.dp))
-        sample?.let {
-            Text("Tension ${it.voltageMv} mV — Temp ${it.tempDeciC / 10.0} °C — Niveau ${it.levelPct} %")
-            Text("Santé ${it.health} — Technologie ${it.technology}")
+
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.padding(16.dp).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = when {
+                        unsupported -> "mesure non supportée sur cet appareil"
+                        ma != null -> "$ma mA"
+                        else -> "—"
+                    },
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = currentColor,
+                )
+                Text(
+                    statusLabel(sample?.status ?: ChargeStatus.UNKNOWN),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "min ${min ?: "—"} mA   max ${max ?: "—"} mA",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
         }
+
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            LiveGraph(
+                Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .padding(8.dp)
+            )
+        }
+
+        sample?.let { s ->
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        DetailCell("Tension", "${s.voltageMv} mV")
+                        DetailCell("Niveau", "${s.levelPct} %")
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        DetailCell("Température", "${s.tempDeciC / 10.0} °C")
+                        DetailCell("Santé", s.health)
+                    }
+                }
+            }
+
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Technologie", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                    SuggestionChip(onClick = {}, label = { Text(s.technology) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailCell(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     }
 }

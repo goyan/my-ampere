@@ -8,10 +8,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 
-/** Graphe (timestamp, courant en mA) partagé par LiveGraph et HistoryScreen :
- *  min/max clampés à 0, ligne zéro grise, tracé bleu. */
 @Composable
-fun LineChart(points: List<Pair<Long, Int>>, modifier: Modifier = Modifier) {
+fun LineChart(points: List<Pair<Long, Int>>, modifier: Modifier = Modifier, color: Color = Palette.graphBlue) {
     Canvas(modifier) {
         if (points.size < 2) return@Canvas
         val minV = points.minOf { it.second }.coerceAtMost(0)
@@ -27,6 +25,6 @@ fun LineChart(points: List<Pair<Long, Int>>, modifier: Modifier = Modifier) {
             val x = size.width * (ts - t0).toFloat() / tSpan
             if (i == 0) path.moveTo(x, y(ma)) else path.lineTo(x, y(ma))
         }
-        drawPath(path, Palette.graphBlue, style = Stroke(width = 2f))
+        drawPath(path, color, style = Stroke(width = 2f))
     }
 }

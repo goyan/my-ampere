@@ -1,7 +1,6 @@
 package dev.frx.myampere.ui
 
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -16,7 +15,7 @@ import androidx.compose.ui.Modifier
 @Composable
 fun AppRoot() {
     var tab by remember { mutableIntStateOf(0) }
-    MaterialTheme {
+    MyAmpereTheme {
         Scaffold(topBar = {
             TabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Live") })
