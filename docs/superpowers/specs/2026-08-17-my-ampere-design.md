@@ -37,17 +37,17 @@ BatteryManager ──> SamplerService (FGS) ──> BatteryRepository (StateFlow
 - **`BatteryRepository`** (singleton) : expose `StateFlow<BatterySample>` + min/max session. L'app **observe ce flow** — jamais de deuxième sampler quand l'app est ouverte.
 - **`BatterySample`** : `timestamp, currentMa (signé, normalisé), levelPct, voltageMv, tempDeciC, status`.
 
-### Normalisation OEM (étape 0 du plan)
+### Normalisation OEM — sonde faite (2026-08-17)
 
-`BATTERY_PROPERTY_CURRENT_NOW` varie selon OEM : unité (µA vs mA) et signe (charge positive ou négative). Sonde adb obligatoire avant d'écrire la couche de normalisation, téléphone branché puis débranché :
+Appareil cible : **Samsung SM-G985F (Galaxy S20+), Android 13 / SDK 33**. Sonde adb (branché puis débranché, lectures `sysfs current_now` + `dumpsys battery`) :
 
-```bash
-adb shell getprop ro.product.manufacturer ro.product.model
-adb shell dumpsys battery
-adb shell cat /sys/class/power_supply/battery/current_now   # plusieurs lectures espacées
-```
+| Fait mesuré | Résultat |
+|-|-|
+| Unité | **mA** (sysfs = valeur dumpsys, pas de µA — quirk Samsung) |
+| Signe | **charge/full = positif, décharge = négatif** (~+510 branché, ~-140 débranché écran off) |
+| Fraîcheur fuel gauge | valeur différente à chaque lecture espacée de 2 s → échantillonnage 1 s/5 s réaliste |
 
-La sonde tranche : unité, convention de signe, granularité de rafraîchissement de la fuel gauge (certaines ne bougent que toutes les ~10 s — ajusterait l'intervalle app visible). La normalisation vit dans une fonction pure testée unitairement. Convention interne : **charge = positif = vert ; décharge = négatif = rouge**.
+Convention interne : **charge = positif = vert ; décharge = négatif = rouge** — identique au natif sur cet appareil, la normalisation se réduit à une conversion d'unité conditionnelle (l'API `BATTERY_PROPERTY_CURRENT_NOW` documente des µA ; sur cet appareil la valeur est en mA → heuristique |valeur| > 10 000 ⇒ µA, sinon mA). Fonction pure testée unitairement.
 
 ## Machine à états écran × charge (budget conso)
 
