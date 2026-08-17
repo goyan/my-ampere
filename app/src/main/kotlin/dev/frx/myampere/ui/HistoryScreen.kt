@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -73,7 +71,6 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
     Column(
         modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -83,14 +80,14 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.outline,
         )
 
-        ChartCard("Courant (mA)", MaterialTheme.colorScheme.primary, lastCurrentMa?.let { "$it mA" }) { color ->
-            LineChart(pointsCurrent, Modifier.fillMaxWidth().height(220.dp), color)
+        ChartCard("Courant (mA)", MaterialTheme.colorScheme.primary, lastCurrentMa?.let { "$it mA" }, Modifier.weight(1f)) { color ->
+            LineChart(pointsCurrent, Modifier.fillMaxWidth().weight(1f), color)
         }
-        ChartCard("Niveau (%)", MaterialTheme.colorScheme.secondary, lastLevelPct?.let { "$it %" }) { color ->
-            LineChart(pointsLevel, Modifier.fillMaxWidth().height(180.dp), color)
+        ChartCard("Niveau (%)", MaterialTheme.colorScheme.secondary, lastLevelPct?.let { "$it %" }, Modifier.weight(1f)) { color ->
+            LineChart(pointsLevel, Modifier.fillMaxWidth().weight(1f), color)
         }
-        ChartCard("Tension (mV)", MaterialTheme.colorScheme.tertiary, lastVoltageMv?.let { "$it mV" }) { color ->
-            LineChart(pointsVoltage, Modifier.fillMaxWidth().height(180.dp), color)
+        ChartCard("Tension (mV)", MaterialTheme.colorScheme.tertiary, lastVoltageMv?.let { "$it mV" }, Modifier.weight(1f)) { color ->
+            LineChart(pointsVoltage, Modifier.fillMaxWidth().weight(1f), color)
         }
     }
 }
@@ -100,10 +97,11 @@ private fun ChartCard(
     title: String,
     titleColor: Color,
     currentValue: String? = null,
+    modifier: Modifier = Modifier,
     chart: @Composable (Color) -> Unit,
 ) {
-    ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+    ElevatedCard(modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
