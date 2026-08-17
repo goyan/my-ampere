@@ -17,7 +17,7 @@ object WidgetPusher {
     private const val PERSIST_THROTTLE_MS = 60_000L
     @Volatile private var lastPersistMs = 0L
 
-    fun push(context: Context, currentMa: Int, status: ChargeStatus) {
+    fun push(context: Context, currentMa: Int, status: ChargeStatus, levelPct: Int, voltageMv: Int) {
         val mgr = AppWidgetManager.getInstance(context)
         val ids = mgr.getAppWidgetIds(ComponentName(context, BatteryWidgetProvider::class.java))
         if (ids.isEmpty()) return
@@ -27,6 +27,8 @@ object WidgetPusher {
             setTextViewText(R.id.widget_value, "$currentMa mA")
             setTextColor(R.id.widget_value, color)
             setTextViewText(R.id.widget_label, statusLabelShort(status))
+            setTextViewText(R.id.widget_level, "$levelPct %")
+            setTextViewText(R.id.widget_voltage, "$voltageMv mV")
         }
         mgr.partiallyUpdateAppWidget(ids, views)
         // Persistance throttlée (1/min) : la valeur ne sert qu'au fallback grisé,
@@ -34,7 +36,11 @@ object WidgetPusher {
         val now = System.currentTimeMillis()
         if (now - lastPersistMs >= PERSIST_THROTTLE_MS) {
             lastPersistMs = now
-            runBlocking { Prefs.setLastMa(context, currentMa) }
+            runBlocking {
+                Prefs.setLastMa(context, currentMa)
+                Prefs.setLastLevel(context, levelPct)
+                Prefs.setLastVoltage(context, voltageMv)
+            }
         }
     }
 
@@ -43,13 +49,17 @@ object WidgetPusher {
         val mgr = AppWidgetManager.getInstance(context)
         val ids = mgr.getAppWidgetIds(ComponentName(context, BatteryWidgetProvider::class.java))
         if (ids.isEmpty()) return
-        val last = runBlocking { Prefs.lastMa(context) }
+        val (last, lastLevel, lastVoltage) = runBlocking {
+            Triple(Prefs.lastMa(context), Prefs.lastLevel(context), Prefs.lastVoltage(context))
+        }
         val pi = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE)
         val views = RemoteViews(context.packageName, R.layout.widget_battery).apply {
             setTextViewText(R.id.widget_value, if (last != null) "$last mA" else "— mA")
             setTextColor(R.id.widget_value, context.getColor(R.color.stale_grey))
             setTextViewText(R.id.widget_label, "inactif")
+            setTextViewText(R.id.widget_level, if (lastLevel != null) "$lastLevel %" else "-- %")
+            setTextViewText(R.id.widget_voltage, if (lastVoltage != null) "$lastVoltage mV" else "-- mV")
             setOnClickPendingIntent(R.id.widget_root, pi)
         }
         mgr.updateAppWidget(ids, views) // full update: pose aussi le click handler

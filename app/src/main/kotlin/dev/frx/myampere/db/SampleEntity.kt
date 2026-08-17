@@ -9,6 +9,7 @@ data class SampleEntity(
     @PrimaryKey val timestampMs: Long,
     val currentMa: Int,
     val levelPct: Int,
+    val voltageMv: Int,
 )
 
-fun BatterySample.toEntity() = SampleEntity(timestampMs, currentMa, levelPct)
+fun BatterySample.toEntity() = SampleEntity(timestampMs, currentMa, levelPct, voltageMv)

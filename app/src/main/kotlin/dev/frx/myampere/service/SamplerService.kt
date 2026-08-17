@@ -103,7 +103,7 @@ class SamplerService : Service() {
                     if (sample != null) {
                         BatteryRepository.onSample(sample)
                         if (shouldPushWidget(gate, sample.currentMa, now, screenOn())) {
-                            WidgetPusher.push(this@SamplerService, sample.currentMa, sample.status)
+                            WidgetPusher.push(this@SamplerService, sample.currentMa, sample.status, sample.levelPct, sample.voltageMv)
                             gate = WidgetGateState(sample.currentMa, now)
                         }
                     } else {

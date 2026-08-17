@@ -23,18 +23,31 @@ import kotlinx.coroutines.withContext
 @Composable
 fun HistoryScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var points by remember { mutableStateOf<List<Pair<Long, Int>>>(emptyList()) }
+    var pointsCurrent by remember { mutableStateOf<List<Pair<Long, Int>>>(emptyList()) }
+    var pointsLevel by remember { mutableStateOf<List<Pair<Long, Int>>>(emptyList()) }
+    var pointsVoltage by remember { mutableStateOf<List<Pair<Long, Int>>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         val now = System.currentTimeMillis()
-        points = withContext(Dispatchers.Default) {
+        val (current, level, voltage) = withContext(Dispatchers.Default) {
             val rows = AppDb.get(context).sampleDao().range(now - 24L * 3600 * 1000, now)
-            downsampleForDisplay(rows.map { it.timestampMs to it.currentMa }, 300)
+            Triple(
+                downsampleForDisplay(rows.map { it.timestampMs to it.currentMa }, 300),
+                downsampleForDisplay(rows.map { it.timestampMs to it.levelPct }, 300),
+                downsampleForDisplay(rows.map { it.timestampMs to it.voltageMv }, 300),
+            )
         }
+        pointsCurrent = current
+        pointsLevel = level
+        pointsVoltage = voltage
     }
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
-        Text("Dernières 24 h — ${points.size} points")
-        LineChart(points, Modifier.fillMaxWidth().height(220.dp))
+        Text("Dernières 24 h — ${pointsCurrent.size} points")
+        LineChart(pointsCurrent, Modifier.fillMaxWidth().height(220.dp))
+        Text("Niveau batterie (%)", Modifier.padding(top = 16.dp))
+        LineChart(pointsLevel, Modifier.fillMaxWidth().height(180.dp))
+        Text("Tension (mV)", Modifier.padding(top = 16.dp))
+        LineChart(pointsVoltage, Modifier.fillMaxWidth().height(180.dp))
     }
 }
