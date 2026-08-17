@@ -12,6 +12,7 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import dev.frx.myampere.MainActivity
 import dev.frx.myampere.core.BatteryRepository
 import dev.frx.myampere.core.SamplingConditions
@@ -25,6 +26,7 @@ import dev.frx.myampere.db.RAW_RETENTION_MS
 import dev.frx.myampere.db.selectDownsampleDeletions
 import dev.frx.myampere.db.toEntity
 import dev.frx.myampere.widget.WidgetPusher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,7 +36,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class SamplerService : Service() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
     private var loop: Job? = null
     private lateinit var reader: BatteryReader
     private var gate = WidgetGateState(null, 0L)
@@ -70,22 +72,28 @@ class SamplerService : Service() {
         loop?.cancel()
         loop = scope.launch {
             while (true) {
-                val interval = samplingIntervalMs(
-                    SamplingConditions(screenOn = screenOn(), plugged = reader.isPlugged(), appVisible = appVisible)
-                ) ?: run { flushToDb(); return@launch } // stop total: receivers réveilleront
+                try {
+                    val interval = samplingIntervalMs(
+                        SamplingConditions(screenOn = screenOn(), plugged = reader.isPlugged(), appVisible = appVisible)
+                    ) ?: run { flushToDb(); return@launch } // stop total: receivers réveilleront
 
-                val now = System.currentTimeMillis()
-                val sample = reader.read(now)
-                if (sample != null) {
-                    BatteryRepository.onSample(sample)
-                    if (shouldPushWidget(gate, sample.currentMa, now, screenOn())) {
-                        WidgetPusher.push(this@SamplerService, sample.currentMa, sample.status)
-                        gate = WidgetGateState(sample.currentMa, now)
+                    val now = System.currentTimeMillis()
+                    val sample = reader.read(now)
+                    if (sample != null) {
+                        BatteryRepository.onSample(sample)
+                        if (shouldPushWidget(gate, sample.currentMa, now, screenOn())) {
+                            WidgetPusher.push(this@SamplerService, sample.currentMa, sample.status)
+                            gate = WidgetGateState(sample.currentMa, now)
+                        }
                     }
+                    if (now - lastFlushMs >= FLUSH_INTERVAL_MS) { flushToDb(); lastFlushMs = now }
+                    if (now - lastMaintenanceMs >= MAINTENANCE_INTERVAL_MS) { runMaintenance(now); lastMaintenanceMs = now }
+                    delay(interval)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Log.e("SamplerService", "loop iteration failed", e)
+                    delay(5_000)
                 }
-                if (now - lastFlushMs >= FLUSH_INTERVAL_MS) { flushToDb(); lastFlushMs = now }
-                if (now - lastMaintenanceMs >= MAINTENANCE_INTERVAL_MS) { runMaintenance(now); lastMaintenanceMs = now }
-                delay(interval)
             }
         }
     }
@@ -118,7 +126,12 @@ class SamplerService : Service() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(stateReceiver)
+        loop?.cancel()
+        try {
+            unregisterReceiver(stateReceiver)
+        } catch (e: IllegalArgumentException) {
+            // receiver already unregistered
+        }
         scope.launch { flushToDb() }.invokeOnCompletion { scope.cancel() }
         super.onDestroy()
     }
