@@ -6,17 +6,12 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import dev.frx.myampere.MainActivity
 import dev.frx.myampere.R
 import dev.frx.myampere.core.ChargeStatus
-import kotlinx.coroutines.flow.first
+import dev.frx.myampere.core.Prefs
+import dev.frx.myampere.core.statusLabel
 import kotlinx.coroutines.runBlocking
-
-private val Context.widgetStore by preferencesDataStore(name = "widget")
-private val KEY_LAST_MA = intPreferencesKey("last_ma")
 
 object WidgetPusher {
     private const val PERSIST_THROTTLE_MS = 60_000L
@@ -28,16 +23,10 @@ object WidgetPusher {
         if (ids.isEmpty()) return
         val color = if (currentMa >= 0) context.getColor(R.color.charge_green)
                     else context.getColor(R.color.discharge_red)
-        val label = when (status) {
-            ChargeStatus.CHARGING -> "charge"
-            ChargeStatus.FULL -> "plein"
-            ChargeStatus.DISCHARGING -> "décharge"
-            else -> "—"
-        }
         val views = RemoteViews(context.packageName, R.layout.widget_battery).apply {
             setTextViewText(R.id.widget_value, "$currentMa mA")
             setTextColor(R.id.widget_value, color)
-            setTextViewText(R.id.widget_label, label)
+            setTextViewText(R.id.widget_label, statusLabel(status))
         }
         mgr.partiallyUpdateAppWidget(ids, views)
         // Persistance throttlée (1/min) : la valeur ne sert qu'au fallback grisé,
@@ -45,7 +34,7 @@ object WidgetPusher {
         val now = System.currentTimeMillis()
         if (now - lastPersistMs >= PERSIST_THROTTLE_MS) {
             lastPersistMs = now
-            runBlocking { context.widgetStore.edit { it[KEY_LAST_MA] = currentMa } }
+            runBlocking { Prefs.setLastMa(context, currentMa) }
         }
     }
 
@@ -54,14 +43,14 @@ object WidgetPusher {
         val mgr = AppWidgetManager.getInstance(context)
         val ids = mgr.getAppWidgetIds(ComponentName(context, BatteryWidgetProvider::class.java))
         if (ids.isEmpty()) return
-        val last = runBlocking { context.widgetStore.data.first()[KEY_LAST_MA] }
+        val last = runBlocking { Prefs.lastMa(context) }
         val pi = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE)
         val views = RemoteViews(context.packageName, R.layout.widget_battery).apply {
             setTextViewText(R.id.widget_value, if (last != null) "$last mA" else "— mA")
             setTextColor(R.id.widget_value, context.getColor(R.color.stale_grey))
             setTextViewText(R.id.widget_label, "inactif")
-            setOnClickPendingIntent(R.id.widget_value, pi)
+            setOnClickPendingIntent(R.id.widget_root, pi)
         }
         mgr.updateAppWidget(ids, views) // full update: pose aussi le click handler
     }

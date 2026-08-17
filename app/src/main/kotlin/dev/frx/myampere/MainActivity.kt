@@ -21,16 +21,28 @@ class MainActivity : ComponentActivity() {
         } else startSampler()
     }
 
-    private fun startSampler() { if (SamplerService.userEnabled) SamplerService.start(this) }
+    private fun startSampler() { if (SamplerService.userEnabled) safeStartSampler() }
+
+    /** Ne jamais crasher l'activité si le FGS refuse de démarrer (état d'app en arrière-plan,
+     *  permission retirée entre deux bascules d'écran, etc.). */
+    private fun safeStartSampler() {
+        try {
+            SamplerService.start(this)
+        } catch (e: IllegalStateException) {
+            // contexte d'app impropre au démarrage d'un foreground service, on ignore
+        } catch (e: SecurityException) {
+            // permission manquante (POST_NOTIFICATIONS révoquée entre-temps), on ignore
+        }
+    }
 
     override fun onResume() {
         super.onResume()
         SamplerService.appVisible = true
-        if (SamplerService.userEnabled) SamplerService.start(this)
+        if (SamplerService.userEnabled) safeStartSampler()
     }
     override fun onPause() {
         super.onPause()
         SamplerService.appVisible = false
-        if (SamplerService.userEnabled) SamplerService.start(this)
+        if (SamplerService.userEnabled) safeStartSampler()
     }
 }

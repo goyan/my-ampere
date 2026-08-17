@@ -7,7 +7,7 @@ import org.junit.Test
 
 class BatteryRepositoryTest {
     private fun sample(ts: Long, ma: Int) =
-        BatterySample(ts, ma, 80, 4000, 300, ChargeStatus.DISCHARGING)
+        BatterySample(ts, ma, 80, 4000, 300, ChargeStatus.DISCHARGING, "bonne", "Li-ion")
 
     @Before fun reset() = BatteryRepository.resetForTest()
 
@@ -34,5 +34,24 @@ class BatteryRepositoryTest {
         repeat(700) { BatteryRepository.onSample(sample(it.toLong(), -it)) }
         assertEquals(600, BatteryRepository.recentWindow().size)
         assertEquals(-699, BatteryRepository.recentWindow().last().currentMa)
+    }
+
+    @Test fun `30 lectures nulles consecutives declenchent unsupported`() {
+        repeat(29) { BatteryRepository.onUnsupportedSample() }
+        assertEquals(false, BatteryRepository.unsupported.value)
+        BatteryRepository.onUnsupportedSample()
+        assertEquals(true, BatteryRepository.unsupported.value)
+    }
+
+    @Test fun `30 echantillons a 0 mA consecutifs declenchent unsupported`() {
+        repeat(30) { BatteryRepository.onSample(sample(it.toLong(), 0)) }
+        assertEquals(true, BatteryRepository.unsupported.value)
+    }
+
+    @Test fun `un echantillon non nul reinitialise le compteur unsupported`() {
+        repeat(29) { BatteryRepository.onSample(sample(it.toLong(), 0)) }
+        BatteryRepository.onSample(sample(29L, -50))
+        repeat(29) { BatteryRepository.onSample(sample((30 + it).toLong(), 0)) }
+        assertEquals(false, BatteryRepository.unsupported.value)
     }
 }

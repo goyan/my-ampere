@@ -15,6 +15,7 @@ import android.os.PowerManager
 import android.util.Log
 import dev.frx.myampere.MainActivity
 import dev.frx.myampere.core.BatteryRepository
+import dev.frx.myampere.core.Prefs
 import dev.frx.myampere.core.SamplingConditions
 import dev.frx.myampere.core.WidgetGateState
 import dev.frx.myampere.core.samplingIntervalMs
@@ -34,6 +35,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class SamplerService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
@@ -42,6 +44,7 @@ class SamplerService : Service() {
     private var gate = WidgetGateState(null, 0L)
     private var lastFlushMs = 0L
     private var lastMaintenanceMs = 0L
+    @Volatile private var fullUpdatePosted = false
 
     private val stateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) = restartLoop()
@@ -50,6 +53,10 @@ class SamplerService : Service() {
     override fun onCreate() {
         super.onCreate()
         reader = BatteryReader(this)
+        lastMaintenanceMs = System.currentTimeMillis()
+        // Une seule lecture bloquante ici (process fraîchement créé, hors main thread suivant) :
+        // resynchronise le toggle utilisateur avec sa valeur persistée avant tout démarrage.
+        userEnabled = runBlocking { Prefs.userEnabled(this@SamplerService) }
         registerReceiver(stateReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -61,7 +68,14 @@ class SamplerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        WidgetPusher.pushStale(this)
+        if (!fullUpdatePosted) {
+            fullUpdatePosted = true
+            scope.launch { WidgetPusher.pushStale(this@SamplerService) }
+        }
+        if (!userEnabled) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         restartLoop()
         return START_STICKY
     }
@@ -86,7 +100,10 @@ class SamplerService : Service() {
                             WidgetPusher.push(this@SamplerService, sample.currentMa, sample.status)
                             gate = WidgetGateState(sample.currentMa, now)
                         }
+                    } else {
+                        BatteryRepository.onUnsupportedSample()
                     }
+                    if (BatteryRepository.unsupported.value) { flushToDb(); return@launch }
                     if (now - lastFlushMs >= FLUSH_INTERVAL_MS) { flushToDb(); lastFlushMs = now }
                     if (now - lastMaintenanceMs >= MAINTENANCE_INTERVAL_MS) { runMaintenance(now); lastMaintenanceMs = now }
                     delay(interval)
@@ -106,7 +123,8 @@ class SamplerService : Service() {
 
     private suspend fun runMaintenance(nowMs: Long) {
         val dao = AppDb.get(this).sampleDao()
-        val old = dao.timestampsBefore(nowMs - RAW_RETENTION_MS)
+        val cutoff = nowMs - RAW_RETENTION_MS
+        val old = dao.timestampsBetween(cutoff - MAINTENANCE_WINDOW_MS, cutoff)
         val toDelete = selectDownsampleDeletions(old, DOWNSAMPLE_BUCKET_MS)
         if (toDelete.isNotEmpty()) toDelete.chunked(500).forEach { dao.deleteByTimestamps(it) }
         dao.deleteBefore(nowMs - PURGE_AFTER_MS)
@@ -145,14 +163,26 @@ class SamplerService : Service() {
         private const val CHANNEL_ID = "sampler"
         private const val FLUSH_INTERVAL_MS = 60_000L
         private const val MAINTENANCE_INTERVAL_MS = 6L * 3600 * 1000
+        private const val MAINTENANCE_WINDOW_MS = 7L * 24 * 3600 * 1000
+
+        private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         @Volatile var appVisible: Boolean = false
-        /** Toggle utilisateur : quand false, onResume/onPause ne relancent PAS le service. */
+        /** Toggle utilisateur : quand false, onResume/onPause ne relancent PAS le service.
+         *  Source de vérité durable : [Prefs.userEnabled] (DataStore) — ce champ n'est qu'un
+         *  cache mémoire, resynchronisé depuis le disque à chaque [onCreate]. */
         @Volatile var userEnabled: Boolean = true
 
         fun start(context: Context) =
             context.startForegroundService(Intent(context, SamplerService::class.java))
         fun stop(context: Context) =
             context.stopService(Intent(context, SamplerService::class.java))
+
+        /** Change le toggle utilisateur : persiste puis démarre/arrête le service en conséquence. */
+        fun setUserEnabled(context: Context, enabled: Boolean) {
+            userEnabled = enabled
+            ioScope.launch { Prefs.setUserEnabled(context, enabled) }
+            if (enabled) start(context) else stop(context)
+        }
     }
 }

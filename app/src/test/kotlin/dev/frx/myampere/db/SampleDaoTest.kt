@@ -28,6 +28,11 @@ class SampleDaoTest {
     @Test fun `delete by timestamps`() = runTest {
         db.sampleDao().insertAll(listOf(SampleEntity(1L, -100, 80), SampleEntity(2L, -110, 80)))
         db.sampleDao().deleteByTimestamps(listOf(1L))
-        assertEquals(listOf(2L), db.sampleDao().timestampsBefore(100L))
+        assertEquals(listOf(2L), db.sampleDao().timestampsBetween(0L, 100L))
+    }
+
+    @Test fun `timestampsBetween borne la fenetre haute et basse`() = runTest {
+        db.sampleDao().insertAll(listOf(SampleEntity(1L, -100, 80), SampleEntity(50L, -110, 80), SampleEntity(200L, 500, 81)))
+        assertEquals(listOf(50L), db.sampleDao().timestampsBetween(10L, 100L))
     }
 }
