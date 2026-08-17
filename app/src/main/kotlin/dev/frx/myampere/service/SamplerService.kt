@@ -61,6 +61,7 @@ class SamplerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        WidgetPusher.pushStale(this)
         restartLoop()
         return START_STICKY
     }
@@ -127,6 +128,7 @@ class SamplerService : Service() {
 
     override fun onDestroy() {
         loop?.cancel()
+        WidgetPusher.pushStale(this)
         try {
             unregisterReceiver(stateReceiver)
         } catch (e: IllegalArgumentException) {
