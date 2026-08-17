@@ -25,7 +25,13 @@ fun LineChart(
     color: Color = Palette.graphBlue,
     onTapSlope: ((Float) -> Unit)? = null,
 ) {
-    var tappedIdx by remember { mutableStateOf<Int?>(null) }
+    var tappedX by remember { mutableStateOf<Float?>(null) }
+
+    val minV = remember(points) { if (points.isEmpty()) 0 else points.minOf { it.second }.coerceAtMost(0) }
+    val maxV = remember(points) { if (points.isEmpty()) 1 else points.maxOf { it.second }.coerceAtLeast(0) }
+    val span = remember(points) { (maxV - minV).coerceAtLeast(1) }
+    val t0 = remember(points) { if (points.isEmpty()) 0L else points.first().first }
+    val tSpan = remember(points) { if (points.size < 2) 1L else (points.last().first - points.first().first).coerceAtLeast(1) }
 
     Canvas(
         modifier.pointerInput(points) {
@@ -33,16 +39,12 @@ fun LineChart(
                 if (points.size < 2 || onTapSlope == null) return@detectTapGestures
                 val leftMargin = 80f
                 val chartWidth = size.width - leftMargin
-                val t0 = points.first().first
-                val tSpan = (points.last().first - t0).coerceAtLeast(1)
                 val tapTs = t0 + ((offset.x - leftMargin) / chartWidth * tSpan).toLong()
-                val idx = points.indices
-                    .minByOrNull { kotlin.math.abs(points[it].first - tapTs) }
-                    ?.coerceIn(1, points.size - 2) ?: return@detectTapGestures
-                val dVal = (points[idx + 1].second - points[idx - 1].second).toFloat()
-                val dMs = (points[idx + 1].first - points[idx - 1].first).toFloat()
+                val idx = points.indexOfLast { it.first <= tapTs }.coerceIn(0, points.size - 2)
+                val dVal = (points[idx + 1].second - points[idx].second).toFloat()
+                val dMs = (points[idx + 1].first - points[idx].first).toFloat()
                 val slopeMaPerMin = if (dMs > 0f) dVal / dMs * 60_000f else 0f
-                tappedIdx = idx
+                tappedX = offset.x
                 onTapSlope(slopeMaPerMin)
             }
         }
@@ -50,10 +52,8 @@ fun LineChart(
         if (points.size < 2) return@Canvas
         val leftMargin = 80f
         val chartWidth = size.width - leftMargin
-        val minV = points.minOf { it.second }.coerceAtMost(0)
-        val maxV = points.maxOf { it.second }.coerceAtLeast(0)
-        val span = (maxV - minV).coerceAtLeast(1)
-        fun y(v: Int) = size.height * (1f - (v - minV).toFloat() / span)
+        fun yf(v: Float) = size.height * (1f - (v - minV) / span)
+        fun y(v: Int) = yf(v.toFloat())
 
         val labelPaint = android.graphics.Paint().apply {
             textSize = 28f
@@ -82,9 +82,6 @@ fun LineChart(
 
         drawLine(Color.Gray, Offset(leftMargin, y(0)), Offset(size.width, y(0)), strokeWidth = 1f)
 
-        val t0 = points.first().first
-        val t1 = points.last().first
-        val tSpan = (t1 - t0).coerceAtLeast(1)
         val path = Path()
         points.forEachIndexed { i, (ts, ma) ->
             val x = leftMargin + chartWidth * (ts - t0).toFloat() / tSpan
@@ -92,16 +89,19 @@ fun LineChart(
         }
         drawPath(path, color, style = Stroke(width = 2f))
 
-        tappedIdx?.let { idx ->
-            val (ts, ma) = points[idx]
-            val x = leftMargin + chartWidth * (ts - t0).toFloat() / tSpan
+        tappedX?.let { x ->
+            val tapTs = t0 + ((x - leftMargin) / chartWidth * tSpan).toLong()
+            val idx = points.indexOfLast { it.first <= tapTs }.coerceIn(0, points.size - 2)
+            val dMs = (points[idx + 1].first - points[idx].first).toFloat()
+            val t = if (dMs > 0f) (tapTs - points[idx].first).toFloat() / dMs else 0f
+            val interpolatedVal = points[idx].second + (points[idx + 1].second - points[idx].second) * t
             drawLine(
                 color = color.copy(alpha = 0.7f),
                 start = Offset(x, 0f),
                 end = Offset(x, size.height),
                 strokeWidth = 2f,
             )
-            drawCircle(color = color, radius = 8f, center = Offset(x, y(ma)))
+            drawCircle(color = color, radius = 8f, center = Offset(x, yf(interpolatedVal)))
         }
     }
 }
