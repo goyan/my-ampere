@@ -5,13 +5,13 @@ App Android native de monitoring live du courant batterie (mA), avec widget home
 ## Fonctionnalités
 
 - **Écran live** : courant instantané en mA, couleur charge/décharge, min/max de session, graphe temps réel des 10 dernières minutes, tension/température/niveau/santé/technologie.
-- **Widget 2x1** (redimensionnable) : valeur courante colorée, mise à jour toutes les 1-30 s selon l'état écran/charge, tap pour ouvrir l'app.
-- **Historique** : persistance locale (Room), downsampling automatique, graphe 24 h.
+- **Widget 2x1** (redimensionnable) : courant mA coloré, statut, niveau batterie (%), tension (mV) — mise à jour toutes les 1-30 s selon l'état écran/charge, tap pour ouvrir l'app.
+- **Historique** : persistance locale (Room), downsampling automatique, 3 graphes plein écran (courant mA · niveau % · tension mV) avec valeur courante en titre. DB v2 (`voltageMv` ajouté via migration Room).
 - **Sobriété** : un seul échantillonneur (foreground service), zéro wakeup écran éteint en décharge, updates widget partielles et gatées — budget cible < 1 %/jour.
 
 ## Stack
 
-Kotlin, Jetpack Compose, RemoteViews (widget), Room, coroutines. minSdk 31, targetSdk 34.
+Kotlin, Jetpack Compose (Material Design 3 / Material You — couleurs dynamiques Android 12+), RemoteViews (widget), Room, coroutines. minSdk 31, targetSdk 34.
 
 ## Build
 
