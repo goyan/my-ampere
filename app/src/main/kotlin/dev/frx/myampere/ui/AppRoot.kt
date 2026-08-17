@@ -13,11 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 
-fun downsampleForDisplay(samples: List<Pair<Long, Int>>, maxPoints: Int): List<Pair<Long, Int>> {
-    if (samples.size <= maxPoints) return samples
-    return List(maxPoints) { i -> samples[i * (samples.size - 1) / (maxPoints - 1)] }
-}
-
 @Composable
 fun AppRoot() {
     var tab by remember { mutableIntStateOf(0) }
