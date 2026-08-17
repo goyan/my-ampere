@@ -2,6 +2,7 @@ package dev.frx.myampere.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,9 +19,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.frx.myampere.core.downsampleForDisplay
 import dev.frx.myampere.db.AppDb
@@ -33,20 +36,38 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
     var pointsCurrent by remember { mutableStateOf<List<Pair<Long, Int>>>(emptyList()) }
     var pointsLevel by remember { mutableStateOf<List<Pair<Long, Int>>>(emptyList()) }
     var pointsVoltage by remember { mutableStateOf<List<Pair<Long, Int>>>(emptyList()) }
+    var lastCurrentMa by remember { mutableStateOf<Int?>(null) }
+    var lastLevelPct by remember { mutableStateOf<Int?>(null) }
+    var lastVoltageMv by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(Unit) {
         val now = System.currentTimeMillis()
-        val (current, level, voltage) = withContext(Dispatchers.Default) {
+        data class Result(
+            val current: List<Pair<Long, Int>>,
+            val level: List<Pair<Long, Int>>,
+            val voltage: List<Pair<Long, Int>>,
+            val lastMa: Int?,
+            val lastPct: Int?,
+            val lastMv: Int?,
+        )
+        val r = withContext(Dispatchers.Default) {
             val rows = AppDb.get(context).sampleDao().range(now - 24L * 3600 * 1000, now)
-            Triple(
-                downsampleForDisplay(rows.map { it.timestampMs to it.currentMa }, 300),
-                downsampleForDisplay(rows.map { it.timestampMs to it.levelPct }, 300),
-                downsampleForDisplay(rows.map { it.timestampMs to it.voltageMv }, 300),
+            val last = rows.lastOrNull()
+            Result(
+                current = downsampleForDisplay(rows.map { it.timestampMs to it.currentMa }, 300),
+                level = downsampleForDisplay(rows.map { it.timestampMs to it.levelPct }, 300),
+                voltage = downsampleForDisplay(rows.map { it.timestampMs to it.voltageMv }, 300),
+                lastMa = last?.currentMa,
+                lastPct = last?.levelPct,
+                lastMv = last?.voltageMv,
             )
         }
-        pointsCurrent = current
-        pointsLevel = level
-        pointsVoltage = voltage
+        pointsCurrent = r.current
+        pointsLevel = r.level
+        pointsVoltage = r.voltage
+        lastCurrentMa = r.lastMa
+        lastLevelPct = r.lastPct
+        lastVoltageMv = r.lastMv
     }
 
     Column(
@@ -62,23 +83,42 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.outline,
         )
 
-        ChartCard("Courant (mA)", MaterialTheme.colorScheme.primary) { color ->
+        ChartCard("Courant (mA)", MaterialTheme.colorScheme.primary, lastCurrentMa?.let { "$it mA" }) { color ->
             LineChart(pointsCurrent, Modifier.fillMaxWidth().height(220.dp), color)
         }
-        ChartCard("Niveau (%)", MaterialTheme.colorScheme.secondary) { color ->
+        ChartCard("Niveau (%)", MaterialTheme.colorScheme.secondary, lastLevelPct?.let { "$it %" }) { color ->
             LineChart(pointsLevel, Modifier.fillMaxWidth().height(180.dp), color)
         }
-        ChartCard("Tension (mV)", MaterialTheme.colorScheme.tertiary) { color ->
+        ChartCard("Tension (mV)", MaterialTheme.colorScheme.tertiary, lastVoltageMv?.let { "$it mV" }) { color ->
             LineChart(pointsVoltage, Modifier.fillMaxWidth().height(180.dp), color)
         }
     }
 }
 
 @Composable
-private fun ChartCard(title: String, titleColor: Color, chart: @Composable (Color) -> Unit) {
+private fun ChartCard(
+    title: String,
+    titleColor: Color,
+    currentValue: String? = null,
+    chart: @Composable (Color) -> Unit,
+) {
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = titleColor)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = titleColor)
+                if (currentValue != null) {
+                    Text(
+                        currentValue,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = titleColor,
+                    )
+                }
+            }
             Spacer(Modifier.height(8.dp))
             chart(titleColor)
         }
