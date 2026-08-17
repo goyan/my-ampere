@@ -10,7 +10,7 @@ import dev.frx.myampere.MainActivity
 import dev.frx.myampere.R
 import dev.frx.myampere.core.ChargeStatus
 import dev.frx.myampere.core.Prefs
-import dev.frx.myampere.core.statusLabel
+import dev.frx.myampere.core.statusLabelShort
 import kotlinx.coroutines.runBlocking
 
 object WidgetPusher {
@@ -26,7 +26,7 @@ object WidgetPusher {
         val views = RemoteViews(context.packageName, R.layout.widget_battery).apply {
             setTextViewText(R.id.widget_value, "$currentMa mA")
             setTextColor(R.id.widget_value, color)
-            setTextViewText(R.id.widget_label, statusLabel(status))
+            setTextViewText(R.id.widget_label, statusLabelShort(status))
         }
         mgr.partiallyUpdateAppWidget(ids, views)
         // Persistance throttlée (1/min) : la valeur ne sert qu'au fallback grisé,
