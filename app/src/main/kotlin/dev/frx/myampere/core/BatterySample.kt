@@ -9,4 +9,6 @@ data class BatterySample(
     val voltageMv: Int,
     val tempDeciC: Int,
     val status: ChargeStatus,
+    val health: String = "inconnue",
+    val technology: String = "",
 )
